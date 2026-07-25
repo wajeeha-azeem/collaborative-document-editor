@@ -100,3 +100,8 @@ Sharing DB tests create uniquely named users and clean them up afterward so they
 | HTML content | Simple Tiptap save/load |
 | Share = edit | Matches product plan; no advanced ACL |
 | No real-time sync | Explicitly out of scope |
+
+## Version history
+
+Manual checkpoints are stored in `DocumentVersion`. Save version snapshots the current title/content; restore copies a snapshot back onto the document.
+
