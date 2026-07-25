@@ -47,6 +47,7 @@ type DocumentEditorProps = {
   initialUpdatedAt: string;
   ownerId: string;
   ownerName: string;
+  canEdit: boolean;
 };
 
 export function DocumentEditor({
@@ -56,6 +57,7 @@ export function DocumentEditor({
   initialUpdatedAt,
   ownerId,
   ownerName,
+  canEdit,
 }: DocumentEditorProps) {
   const currentUser = useCurrentUser();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
@@ -85,6 +87,7 @@ export function DocumentEditor({
   const currentUserIdRef = useRef<string | null>(currentUser?.id ?? null);
   const skipNextContentSaveRef = useRef(true);
   const editorRef = useRef<Editor | null>(null);
+  const canEditRef = useRef(canEdit);
 
   const isOwner = currentUser?.id === ownerId;
 
@@ -97,10 +100,11 @@ export function DocumentEditor({
       }),
       Underline,
       Placeholder.configure({
-        placeholder: "Start writing…",
+        placeholder: canEdit ? "Start writing…" : "View-only document",
       }),
     ],
     content: initialContent.trim() ? initialContent : EMPTY_DOCUMENT_HTML,
+    editable: canEdit,
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -117,6 +121,11 @@ export function DocumentEditor({
   useEffect(() => {
     currentUserIdRef.current = currentUser?.id ?? null;
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    canEditRef.current = canEdit;
+    editor?.setEditable(canEdit);
+  }, [editor, canEdit]);
 
   useEffect(() => {
     latestTitleRef.current = title;
@@ -180,6 +189,10 @@ export function DocumentEditor({
         return;
       }
 
+      if (!canEditRef.current) {
+        return;
+      }
+
       if (!currentUserIdRef.current) {
         setSaveState("error");
         setSaveError("Select a demo user before editing.");
@@ -224,6 +237,10 @@ export function DocumentEditor({
   }, [editor, documentId]);
 
   function handleTitleChange(value: string) {
+    if (!canEdit) {
+      return;
+    }
+
     setTitle(value);
 
     if (!currentUserIdRef.current) {
@@ -252,6 +269,10 @@ export function DocumentEditor({
   }
 
   function handleTitleBlur() {
+    if (!canEdit) {
+      return;
+    }
+
     const normalized = normalizeDocumentTitle(title);
 
     if (!normalized) {
@@ -351,6 +372,7 @@ export function DocumentEditor({
           <input
             id="document-title"
             value={title}
+            readOnly={!canEdit}
             onChange={(event) => handleTitleChange(event.target.value)}
             onBlur={handleTitleBlur}
             aria-invalid={saveState === "error" && Boolean(saveError)}
@@ -359,11 +381,19 @@ export function DocumentEditor({
                 ? "document-save-error"
                 : "document-meta"
             }
-            className="font-display min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1 py-1 text-3xl font-semibold tracking-tight text-ink outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-border/60 focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive aria-invalid:focus:ring-destructive/20 sm:text-4xl"
+            className="font-display min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1 py-1 text-3xl font-semibold tracking-tight text-ink outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-border/60 focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive aria-invalid:focus:ring-destructive/20 read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 sm:text-4xl"
             placeholder="Untitled document"
           />
 
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2">
+            {!canEdit ? (
+              <span className="mr-1 inline-flex items-center rounded-full border border-border/70 bg-mist px-2.5 py-1 text-xs font-medium text-ink">
+                View only
+              </span>
+            ) : null}
+            {canEdit && saveState !== "error" ? (
+              <SaveStatus state={saveState} />
+            ) : null}
             {saveState !== "error" ? <SaveStatus state={saveState} /> : null}
             <WithTooltip
               label={isSavingVersion ? "Saving version…" : "Save version"}
@@ -425,9 +455,11 @@ export function DocumentEditor({
       </div>
 
       <div className="document-editor overflow-hidden rounded-2xl border border-border/80">
-        <div className="sticky top-0 z-10">
-          <EditorToolbar editor={editor} />
-        </div>
+        {canEdit ? (
+          <div className="sticky top-0 z-10">
+            <EditorToolbar editor={editor} />
+          </div>
+        ) : null}
         <EditorContent editor={editor} />
       </div>
 

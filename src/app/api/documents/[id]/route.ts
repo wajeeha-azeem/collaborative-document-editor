@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { userCanAccessDocument } from "@/lib/document-access";
+import {
+  getDocumentAccess,
+  userCanEditDocument,
+} from "@/lib/document-access";
 import {
   EMPTY_DOCUMENT_HTML,
   normalizeDocumentTitle,
@@ -38,9 +41,9 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
 
-  const canAccess = await userCanAccessDocument(id, result.user.id);
+  const access = await getDocumentAccess(id, result.user.id);
 
-  if (!canAccess) {
+  if (access === "none") {
     return NextResponse.json(
       { error: "You do not have access to this document." },
       { status: 403 },
@@ -54,6 +57,8 @@ export async function GET(request: Request, context: RouteContext) {
     ownerId: document.ownerId,
     ownerName: document.owner.name,
     updatedAt: document.updatedAt.toISOString(),
+    access,
+    canEdit: access === "edit",
   });
 }
 
@@ -80,11 +85,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
 
-  const canAccess = await userCanAccessDocument(id, result.user.id);
+  const canEdit = await userCanEditDocument(id, result.user.id);
 
-  if (!canAccess) {
+  if (!canEdit) {
     return NextResponse.json(
-      { error: "You do not have access to this document." },
+      { error: "You have view-only access to this document." },
       { status: 403 },
     );
   }

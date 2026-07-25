@@ -30,6 +30,7 @@ export async function GET(request: Request) {
       where: { userId: result.user.id },
       orderBy: { document: { updatedAt: "desc" } },
       select: {
+        role: true,
         document: {
           select: {
             id: true,
@@ -48,11 +49,13 @@ export async function GET(request: Request) {
       title: document.title,
       updatedAt: document.updatedAt.toISOString(),
     })),
-    shared: sharedRows.map(({ document }) => ({
+    shared: sharedRows.map(({ document, role }) => ({
       id: document.id,
       title: document.title,
       updatedAt: document.updatedAt.toISOString(),
       ownerName: document.owner.name,
+      role,
+      canEdit: role === "EDIT",
     })),
   });
 }

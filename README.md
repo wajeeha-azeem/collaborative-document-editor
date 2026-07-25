@@ -76,7 +76,7 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 - Rich text editing: bold, italic, underline, H1/H2, bullet & numbered lists
 - Autosave for title and content, with save status
 - Import `.txt` / `.md` / `.docx` (max 5 MB) into editable documents
-- Share owned documents with another user (edit access)
+- Share with **view** or **edit** roles; dashboard separates owned vs shared
 - Version history (manual Save version + restore)
 - Dashboard separates **Your documents** and **Shared with you**
 
@@ -84,8 +84,8 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 
 1. Select **Alice** → Continue to dashboard  
 2. Create a document → edit + rename → confirm **Saved** → refresh  
-3. Share with **Bob**  
-4. Switch user → **Bob** → open from **Shared with you** → edit  
+3. Share with **Bob** as **Can view**, then try editing as Bob (blocked)  
+4. Reshare/update to **Can edit** → Bob can edit  
 5. Import a `.txt`, `.md`, or `.docx` file  
 6. Click **Save version**, then restore an older checkpoint  
 7. Run `npm test`

@@ -30,7 +30,7 @@ No passwords. Use the home-screen user picker:
 1. Select Alice → create/edit document → refresh (persistence)
 2. Share with Bob → switch to Bob → open shared doc → edit
 3. Import `.txt` / `.md` / `.docx`
-4. `npm test` (unit + sharing tests when `DATABASE_URL` is Postgres)
+4. `npm test` (unit + sharing (view/edit roles) tests when `DATABASE_URL` is Postgres)
 
 ## Deliverables status
 

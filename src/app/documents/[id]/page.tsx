@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { DocumentEditor } from "@/components/document-editor";
 import { buttonVariants } from "@/components/ui/button";
-import { userCanAccessDocument } from "@/lib/document-access";
+import { getDocumentAccess } from "@/lib/document-access";
 import { EMPTY_DOCUMENT_HTML } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/request-user";
@@ -42,9 +42,9 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
     notFound();
   }
 
-  const canAccess = await userCanAccessDocument(document.id, user.id);
+  const access = await getDocumentAccess(document.id, user.id);
 
-  if (!canAccess) {
+  if (access === "none") {
     return <DocumentAccessDenied />;
   }
 
@@ -72,6 +72,7 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
           initialUpdatedAt={document.updatedAt.toISOString()}
           ownerId={document.ownerId}
           ownerName={document.owner.name}
+          canEdit={access === "edit"}
         />
       </div>
     </main>

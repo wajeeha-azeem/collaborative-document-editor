@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { isShareRole, shareRoleLabel } from "@/lib/share-role";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/request-user";
 
@@ -38,6 +39,7 @@ export async function GET(request: Request, context: RouteContext) {
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
+      role: true,
       user: { select: { id: true, name: true } },
       createdAt: true,
     },
@@ -48,6 +50,8 @@ export async function GET(request: Request, context: RouteContext) {
       id: share.id,
       userId: share.user.id,
       userName: share.user.name,
+      role: share.role,
+      roleLabel: shareRoleLabel(share.role),
       createdAt: share.createdAt.toISOString(),
     })),
   });
@@ -101,6 +105,17 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const targetUserId = body.userId.trim();
+  const role =
+    "role" in body && body.role !== undefined
+      ? body.role
+      : "EDIT";
+
+  if (!isShareRole(role)) {
+    return NextResponse.json(
+      { error: "role must be VIEW or EDIT." },
+      { status: 400 },
+    );
+  }
 
   if (targetUserId === result.user.id) {
     return NextResponse.json(
@@ -126,9 +141,11 @@ export async function POST(request: Request, context: RouteContext) {
       data: {
         documentId,
         userId: targetUser.id,
+        role,
       },
       select: {
         id: true,
+        role: true,
         createdAt: true,
         user: { select: { id: true, name: true } },
       },
@@ -139,6 +156,8 @@ export async function POST(request: Request, context: RouteContext) {
         id: share.id,
         userId: share.user.id,
         userName: share.user.name,
+        role: share.role,
+        roleLabel: shareRoleLabel(share.role),
         createdAt: share.createdAt.toISOString(),
       },
       { status: 201 },
