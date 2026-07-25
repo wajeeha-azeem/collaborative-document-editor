@@ -6,12 +6,12 @@ The app is a Next.js App Router product with:
 
 - **UI** in React Server and Client Components
 - **API** via Route Handlers under `src/app/api`
-- **Persistence** via Prisma + SQLite
+- **Persistence** via Prisma + PostgreSQL
 - **Editing** via Tiptap on the client, with HTML stored in the database
 
 ```text
 Browser
-  ├─ User selection (localStorage session)
+  ├─ User selection (localStorage session + cookie)
   ├─ Dashboard (lists owned + shared docs)
   └─ Document editor (Tiptap + autosave)
         │
@@ -23,7 +23,7 @@ Next.js Route Handlers
   └─ /api/users
         │
         ▼
-Prisma Client ──► SQLite (prisma/dev.db)
+Prisma Client ──► PostgreSQL (Neon)
 ```
 
 ## Key directories
@@ -86,16 +86,17 @@ Client-side validation and read (`.txt` / `.md` / `.docx`), conversion to simple
 Vitest covers:
 
 - file import validation / conversion
-- sharing access + duplicate-share DB constraint
+- document title/content helpers
+- sharing access + duplicate-share DB constraint (requires `DATABASE_URL` Postgres)
 
-Tests use an isolated SQLite file (`prisma/test.db`), not the dev database.
+Sharing DB tests create uniquely named users and clean them up afterward so they are safe against a shared Neon database.
 
 ## Design choices
 
 | Choice | Why |
 |--------|-----|
-| SQLite | Fast local setup for the assessment |
-| localStorage session | Matches “seeded users”, minimal ceremony |
+| PostgreSQL (Neon) | Works on Vercel; free tier is enough for the assessment |
+| localStorage + cookie session | Matches “seeded users”, enables server-side authz |
 | HTML content | Simple Tiptap save/load |
 | Share = edit | Matches product plan; no advanced ACL |
 | No real-time sync | Explicitly out of scope |

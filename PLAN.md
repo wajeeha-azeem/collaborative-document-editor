@@ -100,11 +100,11 @@ Data should remain available after refresh.
 
 ## Database
 
-- SQLite
+- PostgreSQL (Neon recommended for local + Vercel)
 
 Reason:
 
-SQLite provides fast setup and is sufficient for this assessment while allowing a clean migration path to PostgreSQL.
+Postgres works on serverless hosts. Neon’s free tier keeps setup simple while matching a real deployment path.
 
 ---
 

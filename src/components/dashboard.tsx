@@ -286,12 +286,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="px-4 pt-3 sm:px-5">
-          <p className="text-xs text-muted-foreground">
-            Import .txt, .md, or .docx · up to 5 MB
-          </p>
-        </div>
-
         {(actionError || loadError) && (
           <div className="space-y-2 px-4 pt-3 sm:px-5">
             {actionError ? <ErrorMessage>{actionError}</ErrorMessage> : null}
