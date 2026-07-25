@@ -13,9 +13,10 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import { Check, LoaderCircle, Share2 } from "lucide-react";
+import { Check, History, LoaderCircle, Save, Share2 } from "lucide-react";
 
 import { DocumentShareDialog } from "@/components/document-share-dialog";
+import { DocumentVersionHistory } from "@/components/document-version-history";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { ErrorMessage } from "@/components/error-message";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,19 @@ export function DocumentEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+  const [versionMessage, setVersionMessage] = useState<string | null>(null);
+
+  function openHistoryModal() {
+    setShareOpen(false);
+    setHistoryOpen(true);
+  }
+
+  function openShareModal() {
+    setHistoryOpen(false);
+    setShareOpen(true);
+  }
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<PendingSave | null>(null);
@@ -252,6 +266,81 @@ export function DocumentEditor({
     }
   }
 
+
+  async function handleSaveVersion() {
+    if (!currentUser || isSavingVersion) {
+      return;
+    }
+
+    setVersionMessage(null);
+    setIsSavingVersion(true);
+
+    try {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      if (editor) {
+        pendingSaveRef.current = {
+          ...pendingSaveRef.current,
+          title,
+          content: editor.getHTML(),
+        };
+      }
+
+      await runSaveQueue({
+        documentId,
+        pendingSaveRef,
+        isSavingRef,
+        updatedAtRef,
+        latestTitleRef,
+        currentUserIdRef,
+        editorRef,
+        skipNextContentSaveRef,
+        setTitle,
+        setSaveState,
+        setSaveError,
+      });
+
+      const response = await apiFetch(`/api/documents/${documentId}/versions`, {
+        method: "POST",
+        userId: currentUser.id,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          await readApiError(response, "Failed to save version."),
+        );
+      }
+
+      setVersionMessage("Version saved.");
+      openHistoryModal();
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(
+        error instanceof Error ? error.message : "Failed to save version.",
+      );
+    } finally {
+      setIsSavingVersion(false);
+    }
+  }
+
+  function handleVersionRestored(payload: {
+    title: string;
+    content: string;
+    updatedAt: string;
+  }) {
+    setTitle(payload.title);
+    latestTitleRef.current = payload.title;
+    updatedAtRef.current = payload.updatedAt;
+    skipNextContentSaveRef.current = true;
+    editor?.commands.setContent(payload.content, { emitUpdate: false });
+    setSaveState("saved");
+    setSaveError(null);
+    setVersionMessage("Restored version.");
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -274,8 +363,39 @@ export function DocumentEditor({
             placeholder="Untitled document"
           />
 
-          <div className="flex shrink-0 items-center gap-1 pt-1.5 sm:pt-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2">
             {saveState !== "error" ? <SaveStatus state={saveState} /> : null}
+            <WithTooltip
+              label={isSavingVersion ? "Saving version…" : "Save version"}
+            >
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-9"
+                aria-label="Save version"
+                disabled={isSavingVersion}
+                onClick={() => void handleSaveVersion()}
+              >
+                {isSavingVersion ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <Save />
+                )}
+              </Button>
+            </WithTooltip>
+            <WithTooltip label="Version history">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Version history"
+                className="size-9"
+                onClick={openHistoryModal}
+              >
+                <History />
+              </Button>
+            </WithTooltip>
             {isOwner ? (
               <WithTooltip label="Share">
                 <Button
@@ -284,7 +404,7 @@ export function DocumentEditor({
                   variant="ghost"
                   aria-label="Share document"
                   className="size-9"
-                  onClick={() => setShareOpen(true)}
+                  onClick={openShareModal}
                 >
                   <Share2 />
                 </Button>
@@ -296,6 +416,7 @@ export function DocumentEditor({
         <p id="document-meta" className="px-1 text-sm text-muted-foreground">
           Owned by {ownerName}
           {isOwner ? null : " · Shared with you"}
+          {versionMessage ? ` · ${versionMessage}` : null}
         </p>
 
         {saveState === "error" && saveError ? (
@@ -318,6 +439,14 @@ export function DocumentEditor({
           onClose={() => setShareOpen(false)}
         />
       ) : null}
+
+      <DocumentVersionHistory
+        documentId={documentId}
+        canEdit
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onRestored={handleVersionRestored}
+      />
     </div>
   );
 }
