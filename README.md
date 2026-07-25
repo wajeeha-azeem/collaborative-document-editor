@@ -77,6 +77,7 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 - Autosave for title and content, with save status
 - Import `.txt` / `.md` / `.docx` (max 5 MB) into editable documents
 - Share with **view** or **edit** roles; dashboard separates owned vs shared
+- Version history (manual Save version + restore)
 - Dashboard separates **Your documents** and **Shared with you**
 
 ## Suggested review flow
@@ -86,7 +87,8 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 3. Share with **Bob** as **Can view**, then try editing as Bob (blocked)  
 4. Reshare/update to **Can edit** → Bob can edit  
 5. Import a `.txt`, `.md`, or `.docx` file  
-6. Run `npm test`
+6. Click **Save version**, then restore an older checkpoint  
+7. Run `npm test`
 
 ## Limitations
 
