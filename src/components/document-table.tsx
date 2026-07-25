@@ -20,6 +20,9 @@ export type DashboardDocument = {
   title: string;
   updatedAt: string;
   ownerName?: string;
+  /** Present on shared documents. */
+  role?: "VIEW" | "EDIT";
+  canEdit?: boolean;
 };
 
 type DocumentTableProps = {
@@ -54,7 +57,6 @@ export function DocumentTable({
       inputRef.current?.select();
     }
   }, [editingId]);
-
 
   async function loadDocumentHtml(documentId: string) {
     if (!currentUser) {
@@ -140,6 +142,7 @@ export function DocumentTable({
           <tbody>
             {documents.map((document) => {
               const isEditing = editingId === document.id;
+              const isViewOnly = document.canEdit === false;
 
               return (
                 <tr
@@ -226,17 +229,23 @@ export function DocumentTable({
                         </>
                       ) : (
                         <>
-                          <WithTooltip label="Rename">
-                            <Button
-                              type="button"
-                              size="icon-sm"
-                              variant="ghost"
-                              aria-label={`Rename ${document.title}`}
-                              onClick={() => startRename(document)}
-                            >
-                              <Pencil />
-                            </Button>
-                          </WithTooltip>
+                          {isViewOnly ? (
+                            <span className="mr-1 inline-flex items-center rounded-full border border-border/70 bg-mist px-2 py-0.5 text-[11px] font-medium text-ink">
+                              View only
+                            </span>
+                          ) : (
+                            <WithTooltip label="Rename">
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                aria-label={`Rename ${document.title}`}
+                                onClick={() => startRename(document)}
+                              >
+                                <Pencil />
+                              </Button>
+                            </WithTooltip>
+                          )}
                           <DocumentExportMenu
                             title={document.title}
                             buttonSize="icon-sm"

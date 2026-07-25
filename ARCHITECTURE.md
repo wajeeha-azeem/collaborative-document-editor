@@ -81,6 +81,14 @@ No real-time merge: concurrent editors are last-write-wins with conflict detecti
 
 Client-side validation and read (`.txt` / `.md` / `.docx`), conversion to simple HTML in `src/lib/file-import.ts` (Word via mammoth), then `POST /api/documents` with title + content.
 
+## Share roles
+
+`DocumentShare.role` is `VIEW` or `EDIT`. Owners always have edit access. View-only users can open documents but cannot PATCH content or rename.
+
+## Version history
+
+Manual checkpoints are stored in `DocumentVersion`. Save version snapshots the current title/content; restore copies a snapshot back onto the document.
+
 ## Testing
 
 Vitest covers:

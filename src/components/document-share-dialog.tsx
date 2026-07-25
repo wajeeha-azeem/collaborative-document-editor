@@ -65,11 +65,11 @@ export function DocumentShareDialog({
                 Share document
               </h2>
               <p className="text-sm text-muted-foreground">
-                Invite someone to edit{" "}
+                Invite someone to{" "}
                 <span className="font-medium text-foreground">
                   {documentTitle}
-                </span>
-                .
+                </span>{" "}
+                with view or edit access.
               </p>
             </div>
           </div>

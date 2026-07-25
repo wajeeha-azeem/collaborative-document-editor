@@ -13,10 +13,11 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import { Check, LoaderCircle, Share2 } from "lucide-react";
+import { Check, History, LoaderCircle, Save, Share2 } from "lucide-react";
 
 import { DocumentExportMenu } from "@/components/document-export-menu";
 import { DocumentShareDialog } from "@/components/document-share-dialog";
+import { DocumentVersionHistory } from "@/components/document-version-history";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { ErrorMessage } from "@/components/error-message";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ type DocumentEditorProps = {
   initialUpdatedAt: string;
   ownerId: string;
   ownerName: string;
+  canEdit: boolean;
 };
 
 export function DocumentEditor({
@@ -57,6 +59,7 @@ export function DocumentEditor({
   initialUpdatedAt,
   ownerId,
   ownerName,
+  canEdit,
 }: DocumentEditorProps) {
   const currentUser = useCurrentUser();
   const [, rerender] = useReducer((count: number) => count + 1, 0);
@@ -64,18 +67,28 @@ export function DocumentEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+  const [versionMessage, setVersionMessage] = useState<string | null>(null);
 
-  function openDownloadMenu() {
-    const next = openExclusiveOverlay("download");
+  function applyExclusiveOverlay(target: "download" | "history" | "share") {
+    const next = openExclusiveOverlay(target);
     setDownloadOpen(next.downloadOpen);
+    setHistoryOpen(next.historyOpen);
     setShareOpen(next.shareOpen);
   }
 
+  function openDownloadMenu() {
+    applyExclusiveOverlay("download");
+  }
+
+  function openHistoryModal() {
+    applyExclusiveOverlay("history");
+  }
+
   function openShareModal() {
-    const next = openExclusiveOverlay("share");
-    setDownloadOpen(next.downloadOpen);
-    setShareOpen(next.shareOpen);
+    applyExclusiveOverlay("share");
   }
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +99,7 @@ export function DocumentEditor({
   const currentUserIdRef = useRef<string | null>(currentUser?.id ?? null);
   const skipNextContentSaveRef = useRef(true);
   const editorRef = useRef<Editor | null>(null);
+  const canEditRef = useRef(canEdit);
 
   const isOwner = currentUser?.id === ownerId;
 
@@ -98,10 +112,11 @@ export function DocumentEditor({
       }),
       Underline,
       Placeholder.configure({
-        placeholder: "Start writing…",
+        placeholder: canEdit ? "Start writing…" : "View-only document",
       }),
     ],
     content: initialContent.trim() ? initialContent : EMPTY_DOCUMENT_HTML,
+    editable: canEdit,
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -120,17 +135,43 @@ export function DocumentEditor({
   }, [currentUser?.id]);
 
   useEffect(() => {
+    canEditRef.current = canEdit;
+    editor?.setEditable(canEdit);
+  }, [editor, canEdit]);
+
+  useEffect(() => {
     latestTitleRef.current = title;
   }, [title]);
 
   useEffect(() => {
-    async function flushSaveQueue(options?: { keepalive?: boolean }) {
+    function flushSaveQueue(options?: { keepalive?: boolean }) {
+      if (!canEditRef.current) {
+        return;
+      }
+
+      const hadDebounceTimer = Boolean(saveTimerRef.current);
+
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
 
-      await runSaveQueue({
+      // Capture in-progress edits that haven't hit pending yet (debounce window).
+      if (hadDebounceTimer || pendingSaveRef.current) {
+        pendingSaveRef.current = {
+          ...pendingSaveRef.current,
+          title: latestTitleRef.current,
+          ...(editorRef.current
+            ? { content: editorRef.current.getHTML() }
+            : {}),
+        };
+      }
+
+      if (!pendingSaveRef.current) {
+        return;
+      }
+
+      void runSaveQueue({
         documentId,
         pendingSaveRef,
         isSavingRef,
@@ -146,21 +187,18 @@ export function DocumentEditor({
       });
     }
 
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      if (!pendingSaveRef.current && !isSavingRef.current) {
-        return;
-      }
-
-      void flushSaveQueue({ keepalive: true });
-      event.preventDefault();
-      event.returnValue = "";
+    function handlePageLeave() {
+      flushSaveQueue({ keepalive: true });
     }
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageLeave);
+    window.addEventListener("beforeunload", handlePageLeave);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      void flushSaveQueue({ keepalive: true });
+      window.removeEventListener("pagehide", handlePageLeave);
+      window.removeEventListener("beforeunload", handlePageLeave);
+      // Next.js client navigations (e.g. back to dashboard) unmount the editor.
+      flushSaveQueue({ keepalive: true });
     };
   }, [documentId]);
 
@@ -178,6 +216,10 @@ export function DocumentEditor({
 
       if (skipNextContentSaveRef.current) {
         skipNextContentSaveRef.current = false;
+        return;
+      }
+
+      if (!canEditRef.current) {
         return;
       }
 
@@ -225,6 +267,10 @@ export function DocumentEditor({
   }, [editor, documentId]);
 
   function handleTitleChange(value: string) {
+    if (!canEdit) {
+      return;
+    }
+
     setTitle(value);
 
     if (!currentUserIdRef.current) {
@@ -253,6 +299,10 @@ export function DocumentEditor({
   }
 
   function handleTitleBlur() {
+    if (!canEdit) {
+      return;
+    }
+
     const normalized = normalizeDocumentTitle(title);
 
     if (!normalized) {
@@ -267,6 +317,86 @@ export function DocumentEditor({
     }
   }
 
+  function handleVersionRestored(payload: {
+    title: string;
+    content: string;
+    updatedAt: string;
+  }) {
+    setTitle(payload.title);
+    latestTitleRef.current = payload.title;
+    updatedAtRef.current = payload.updatedAt;
+    skipNextContentSaveRef.current = true;
+    editor?.commands.setContent(payload.content, { emitUpdate: false });
+    setSaveState("saved");
+    setSaveError(null);
+    setVersionMessage("Restored version.");
+  }
+
+  async function handleSaveVersion() {
+    if (!canEdit || !currentUser || isSavingVersion) {
+      return;
+    }
+
+    setVersionMessage(null);
+    setIsSavingVersion(true);
+
+    try {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      if (editor) {
+        pendingSaveRef.current = {
+          ...pendingSaveRef.current,
+          title,
+          content: editor.getHTML(),
+        };
+      }
+
+      await runSaveQueue({
+        documentId,
+        pendingSaveRef,
+        isSavingRef,
+        updatedAtRef,
+        latestTitleRef,
+        currentUserIdRef,
+        editorRef,
+        skipNextContentSaveRef,
+        setTitle,
+        setSaveState: (value) => {
+          setSaveState((current) => {
+            const next = typeof value === "function" ? value(current) : value;
+            // Keep the status chip stable so toolbar icons don't jump.
+            return next === "saving" ? current : next;
+          });
+        },
+        setSaveError,
+      });
+
+      const response = await apiFetch(`/api/documents/${documentId}/versions`, {
+        method: "POST",
+        userId: currentUser.id,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          await readApiError(response, "Failed to save version."),
+        );
+      }
+
+      setVersionMessage("Version saved.");
+      openHistoryModal();
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(
+        error instanceof Error ? error.message : "Failed to save version.",
+      );
+    } finally {
+      setIsSavingVersion(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-2 print:space-y-3">
@@ -277,6 +407,7 @@ export function DocumentEditor({
           <input
             id="document-title"
             value={title}
+            readOnly={!canEdit}
             onChange={(event) => handleTitleChange(event.target.value)}
             onBlur={handleTitleBlur}
             aria-invalid={saveState === "error" && Boolean(saveError)}
@@ -285,12 +416,46 @@ export function DocumentEditor({
                 ? "document-save-error"
                 : "document-meta"
             }
-            className="font-display min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1 py-1 text-3xl font-semibold tracking-tight text-ink outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-border/60 focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive aria-invalid:focus:ring-destructive/20 sm:text-4xl"
+            className="font-display min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1 py-1 text-3xl font-semibold tracking-tight text-ink outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-border/60 focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive aria-invalid:focus:ring-destructive/20 read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 sm:text-4xl"
             placeholder="Untitled document"
           />
 
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2 print:hidden">
-            {saveState !== "error" ? <SaveStatus state={saveState} /> : null}
+            {!canEdit ? (
+              <span className="mr-1 inline-flex items-center rounded-full border border-border/70 bg-mist px-2.5 py-1 text-xs font-medium text-ink">
+                View only
+              </span>
+            ) : null}
+            {canEdit && saveState !== "error" ? (
+              <SaveStatus
+                state={
+                  isSavingVersion && saveState === "saving"
+                    ? "saved"
+                    : saveState
+                }
+              />
+            ) : null}
+            {canEdit ? (
+              <WithTooltip
+                label={isSavingVersion ? "Saving version…" : "Save version"}
+              >
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-9"
+                  aria-label="Save version"
+                  disabled={isSavingVersion}
+                  onClick={() => void handleSaveVersion()}
+                >
+                  {isSavingVersion ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                </Button>
+              </WithTooltip>
+            ) : null}
             <DocumentExportMenu
               title={title}
               getHtml={() => editor?.getHTML() ?? initialContent}
@@ -303,6 +468,20 @@ export function DocumentEditor({
                 }
               }}
             />
+            {canEdit ? (
+              <WithTooltip label="Version history">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Version history"
+                  className="size-9"
+                  onClick={openHistoryModal}
+                >
+                  <History />
+                </Button>
+              </WithTooltip>
+            ) : null}
             {isOwner ? (
               <WithTooltip label="Share">
                 <Button
@@ -322,7 +501,8 @@ export function DocumentEditor({
 
         <p id="document-meta" className="px-1 text-sm text-muted-foreground">
           Owned by {ownerName}
-          {isOwner ? null : " · Shared with you"}
+          {!isOwner ? " · Shared with you" : null}
+          {versionMessage ? ` · ${versionMessage}` : null}
         </p>
 
         {saveState === "error" && saveError ? (
@@ -331,9 +511,11 @@ export function DocumentEditor({
       </div>
 
       <div className="document-editor overflow-hidden rounded-2xl border border-border/80 print:border-0 print:shadow-none">
-        <div className="sticky top-0 z-10 print:hidden">
-          <EditorToolbar editor={editor} />
-        </div>
+        {canEdit ? (
+          <div className="sticky top-0 z-10 print:hidden">
+            <EditorToolbar editor={editor} />
+          </div>
+        ) : null}
         <EditorContent editor={editor} />
       </div>
 
@@ -343,6 +525,16 @@ export function DocumentEditor({
           documentTitle={title}
           open={shareOpen}
           onClose={() => setShareOpen(false)}
+        />
+      ) : null}
+
+      {canEdit ? (
+        <DocumentVersionHistory
+          documentId={documentId}
+          canEdit={canEdit}
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={handleVersionRestored}
         />
       ) : null}
     </div>

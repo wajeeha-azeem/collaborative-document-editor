@@ -30,7 +30,7 @@ No passwords. Use the home-screen user picker:
 1. Select Alice → create/edit document → refresh (persistence)
 2. Share with Bob → switch to Bob → open shared doc → edit
 3. Import `.txt` / `.md` / `.docx`
-4. `npm test` (unit + sharing tests when `DATABASE_URL` is Postgres)
+4. `npm test` (unit + sharing (view/edit roles) tests when `DATABASE_URL` is Postgres)
 
 ## Deliverables status
 
@@ -54,7 +54,3 @@ Built task-by-task from `TASKS.md` with approach/trade-off notes before each cha
 ## Contact / repo
 
 Local repository only unless a remote URL is provided separately. **Do not assume code was pushed** unless explicitly shared.
-
-### Export
-
-Download Markdown or PDF from the editor and dashboard table.

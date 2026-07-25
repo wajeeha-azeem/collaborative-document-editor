@@ -7,36 +7,57 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ShareRole {
+  VIEW
+  EDIT
+}
+
 model User {
-  id              String          @id @default(cuid())
-  name            String          @unique
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  documents       Document[]
-  sharedDocuments DocumentShare[]
+  id               String            @id @default(cuid())
+  name             String            @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  documents        Document[]
+  sharedDocuments  DocumentShare[]
+  documentVersions DocumentVersion[]
 }
 
 model Document {
-  id        String          @id @default(cuid())
+  id        String            @id @default(cuid())
   title     String
-  content   String          @default("")
+  content   String            @default("")
   ownerId   String
-  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   shares    DocumentShare[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  versions  DocumentVersion[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@index([ownerId])
 }
 
 model DocumentShare {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   documentId String
   userId     String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  role       ShareRole @default(EDIT)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
 
   @@unique([documentId, userId])
   @@index([userId])
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  title       String
+  content     String
+  createdById String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([documentId, createdAt])
 }
