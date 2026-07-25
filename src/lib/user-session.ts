@@ -1,5 +1,8 @@
 export const USER_SESSION_STORAGE_KEY = "cde:current-user";
 
+/** Cookie used by Server Components / Route Handlers to identify the demo user. */
+export const USER_ID_COOKIE = "cde-user-id";
+
 export type UserSession = {
   id: string;
   name: string;
@@ -40,10 +43,28 @@ export function readUserSession(): UserSession | null {
   return parseUserSession(window.localStorage.getItem(USER_SESSION_STORAGE_KEY));
 }
 
+export function syncUserIdCookie(userId: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${USER_ID_COOKIE}=${encodeURIComponent(userId)}; Path=/; SameSite=Lax; Max-Age=31536000`;
+}
+
+export function clearUserIdCookie(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${USER_ID_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
 export function writeUserSession(user: UserSession): void {
   window.localStorage.setItem(USER_SESSION_STORAGE_KEY, JSON.stringify(user));
+  syncUserIdCookie(user.id);
 }
 
 export function clearUserSession(): void {
   window.localStorage.removeItem(USER_SESSION_STORAGE_KEY);
+  clearUserIdCookie();
 }

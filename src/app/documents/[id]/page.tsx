@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { BrandMark } from "@/components/brand-mark";
 import { DocumentEditor } from "@/components/document-editor";
 import { buttonVariants } from "@/components/ui/button";
+import { userCanAccessDocument } from "@/lib/document-access";
 import { EMPTY_DOCUMENT_HTML } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/request-user";
 import { cn } from "@/lib/utils";
 
 type DocumentPageProps = {
@@ -16,6 +18,12 @@ type DocumentPageProps = {
 export const dynamic = "force-dynamic";
 
 export default async function DocumentPage({ params }: DocumentPageProps) {
+  const user = await getSessionUser();
+
+  if (!user) {
+    redirect("/");
+  }
+
   const { id } = await params;
 
   const document = await prisma.document.findUnique({
@@ -25,12 +33,19 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
       title: true,
       content: true,
       ownerId: true,
+      updatedAt: true,
       owner: { select: { name: true } },
     },
   });
 
   if (!document) {
     notFound();
+  }
+
+  const canAccess = await userCanAccessDocument(document.id, user.id);
+
+  if (!canAccess) {
+    return <DocumentAccessDenied />;
   }
 
   return (
@@ -54,9 +69,35 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
           documentId={document.id}
           initialTitle={document.title}
           initialContent={document.content || EMPTY_DOCUMENT_HTML}
+          initialUpdatedAt={document.updatedAt.toISOString()}
           ownerId={document.ownerId}
           ownerName={document.owner.name}
         />
+      </div>
+    </main>
+  );
+}
+
+function DocumentAccessDenied() {
+  return (
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center">
+      <BrandMark href="/dashboard" />
+      <div className="animate-app-fade-up space-y-3">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
+          You don’t have access
+        </h1>
+        <p className="text-base leading-relaxed text-muted-foreground">
+          This document is private. Ask the owner to share it, or switch to a
+          user who already has access.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Link href="/dashboard" className={cn(buttonVariants())}>
+          All documents
+        </Link>
+        <Link href="/" className={cn(buttonVariants({ variant: "outline" }))}>
+          Switch user
+        </Link>
       </div>
     </main>
   );

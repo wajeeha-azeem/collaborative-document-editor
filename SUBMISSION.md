@@ -29,7 +29,7 @@ No passwords. Use the home-screen user picker:
 1. Select Alice → create/edit document → refresh (persistence)
 2. Share with Bob → switch to Bob → open shared doc → edit
 3. Import `.txt` / `.md` / `.docx`
-4. `npm test` (7 tests)
+4. `npm test` (unit + sharing tests)
 
 ## Deliverables status
 
@@ -42,8 +42,8 @@ No passwords. Use the home-screen user picker:
 
 ## Known limitations
 
-- Demo auth only (localStorage + `x-user-id`)
-- No real-time multiplayer editing
+- Demo auth only (localStorage + cookie + `x-user-id`)
+- No real-time multiplayer editing (optimistic concurrency via `updatedAt`)
 - SQLite local file DB
 - Lightweight Markdown import
 

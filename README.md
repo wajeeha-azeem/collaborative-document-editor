@@ -71,8 +71,8 @@ Selection is stored in `localStorage` (`cde:current-user`).
 
 ## Limitations
 
-- Auth is demo-only (seeded users + `localStorage` / `x-user-id` header)
-- Not real-time collaborative editing (no live cursors / CRDT)
+- Auth is demo-only (seeded users + `localStorage` / cookie / `x-user-id` header)
+- Not real-time collaborative editing (no live cursors / CRDT); concurrent saves use optimistic `updatedAt` checks
 - Markdown import is a lightweight converter, not a full Markdown engine
 - SQLite is local-file based; serverless hosts need a different production DB strategy
 - No document delete UI (optional scope)

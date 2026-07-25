@@ -50,10 +50,11 @@ prisma/
 
 1. User picks Alice/Bob on `/`
 2. Session `{ id, name }` is stored in `localStorage`
-3. API calls send `x-user-id`
-4. Server validates the user exists, then enforces ownership / share rules
+3. The selected user id is also synced to a `cde-user-id` cookie so Server Components can authorize
+4. API calls send `x-user-id` (cookie is a fallback)
+5. Server validates the user exists, then enforces ownership / share rules
 
-This avoids building a full auth system while keeping clear authorization boundaries for the MVP.
+This avoids building a full auth system while keeping clear authorization boundaries for the MVP — including the document page, which previously loaded content without an access check.
 
 ## Document access
 
@@ -68,8 +69,13 @@ Used by document GET/PATCH so shared collaborators can open and save.
 
 - Tiptap StarterKit provides required formatting
 - Content is saved as **HTML** (good round-trip for this editor set)
-- Title and content autosave through `PATCH /api/documents/[id]`
+- Title and content share one debounced save queue through `PATCH /api/documents/[id]`
+- Saves send `expectedUpdatedAt`; stale clients receive **409** and reload the latest version
+- Pending saves flush on tab close / navigation (`beforeunload` + keepalive)
+- Content size is capped (`MAX_DOCUMENT_CONTENT_LENGTH`)
 - Save status is shown in the editor chrome
+
+No real-time merge: concurrent editors are last-write-wins with conflict detection, not CRDT.
 
 ## File import
 

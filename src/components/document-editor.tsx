@@ -1,10 +1,18 @@
 "use client";
 
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
-import { useEffect, useReducer, useRef, useState } from "react";
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 import { Check, LoaderCircle, Share2 } from "lucide-react";
 
 import { DocumentShareDialog } from "@/components/document-share-dialog";
@@ -13,20 +21,29 @@ import { ErrorMessage } from "@/components/error-message";
 import { Button } from "@/components/ui/button";
 import { WithTooltip } from "@/components/with-tooltip";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { apiFetch } from "@/lib/api-client";
 import { readApiError } from "@/lib/api-error";
 import {
   EMPTY_DOCUMENT_HTML,
-  USER_ID_HEADER,
   normalizeDocumentTitle,
+  validateDocumentContent,
 } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
+const SAVE_DEBOUNCE_MS = 700;
+
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+type PendingSave = {
+  title?: string;
+  content?: string;
+};
 
 type DocumentEditorProps = {
   documentId: string;
   initialTitle: string;
   initialContent?: string;
+  initialUpdatedAt: string;
   ownerId: string;
   ownerName: string;
 };
@@ -35,6 +52,7 @@ export function DocumentEditor({
   documentId,
   initialTitle,
   initialContent = EMPTY_DOCUMENT_HTML,
+  initialUpdatedAt,
   ownerId,
   ownerName,
 }: DocumentEditorProps) {
@@ -45,10 +63,14 @@ export function DocumentEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
-  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const contentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<PendingSave | null>(null);
+  const isSavingRef = useRef(false);
   const latestTitleRef = useRef(initialTitle);
+  const updatedAtRef = useRef(initialUpdatedAt);
+  const currentUserIdRef = useRef<string | null>(currentUser?.id ?? null);
   const skipNextContentSaveRef = useRef(true);
+  const editorRef = useRef<Editor | null>(null);
 
   const isOwner = currentUser?.id === ownerId;
 
@@ -75,8 +97,57 @@ export function DocumentEditor({
   });
 
   useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id ?? null;
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     latestTitleRef.current = title;
   }, [title]);
+
+  useEffect(() => {
+    async function flushSaveQueue(options?: { keepalive?: boolean }) {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      await runSaveQueue({
+        documentId,
+        pendingSaveRef,
+        isSavingRef,
+        updatedAtRef,
+        latestTitleRef,
+        currentUserIdRef,
+        editorRef,
+        skipNextContentSaveRef,
+        keepalive: options?.keepalive ?? false,
+        setTitle,
+        setSaveState,
+        setSaveError,
+      });
+    }
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!pendingSaveRef.current && !isSavingRef.current) {
+        return;
+      }
+
+      void flushSaveQueue({ keepalive: true });
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      void flushSaveQueue({ keepalive: true });
+    };
+  }, [documentId]);
 
   useEffect(() => {
     if (!editor) {
@@ -95,36 +166,38 @@ export function DocumentEditor({
         return;
       }
 
-      if (!currentUser) {
+      if (!currentUserIdRef.current) {
         setSaveState("error");
         setSaveError("Select a demo user before editing.");
         return;
       }
 
-      if (contentTimerRef.current) {
-        clearTimeout(contentTimerRef.current);
+      const html = editor.getHTML();
+      const contentError = validateDocumentContent(html);
+
+      if (contentError) {
+        setSaveState("error");
+        setSaveError(contentError);
+        return;
       }
 
-      setSaveState("saving");
-      setSaveError(null);
-
-      const html = editor.getHTML();
-      const userId = currentUser.id;
-
-      contentTimerRef.current = setTimeout(() => {
-        void saveDocument({
+      queueSave(
+        { content: html },
+        {
           documentId,
-          userId,
-          body: { content: html },
-          onError: (message) => {
-            setSaveState("error");
-            setSaveError(message);
-          },
-          onSuccess: () => {
-            setSaveState("saved");
-          },
-        });
-      }, 700);
+          pendingSaveRef,
+          saveTimerRef,
+          isSavingRef,
+          updatedAtRef,
+          latestTitleRef,
+          currentUserIdRef,
+          editorRef,
+          skipNextContentSaveRef,
+          setTitle,
+          setSaveState,
+          setSaveError,
+        },
+      );
     };
 
     editor.on("selectionUpdate", handleSelection);
@@ -134,61 +207,34 @@ export function DocumentEditor({
       editor.off("selectionUpdate", handleSelection);
       editor.off("update", handleContentUpdate);
     };
-  }, [editor, currentUser, documentId]);
-
-  useEffect(() => {
-    return () => {
-      if (titleTimerRef.current) {
-        clearTimeout(titleTimerRef.current);
-      }
-      if (contentTimerRef.current) {
-        clearTimeout(contentTimerRef.current);
-      }
-    };
-  }, []);
+  }, [editor, documentId]);
 
   function handleTitleChange(value: string) {
     setTitle(value);
 
-    if (!currentUser) {
+    if (!currentUserIdRef.current) {
       setSaveState("error");
       setSaveError("Select a demo user before editing.");
       return;
     }
 
-    if (titleTimerRef.current) {
-      clearTimeout(titleTimerRef.current);
-    }
-
-    const userId = currentUser.id;
-
-    titleTimerRef.current = setTimeout(() => {
-      const normalized = normalizeDocumentTitle(value);
-
-      if (!normalized) {
-        setSaveState("error");
-        setSaveError("Title cannot be empty.");
-        return;
-      }
-
-      setSaveState("saving");
-      setSaveError(null);
-
-      void saveDocument({
+    queueSave(
+      { title: value },
+      {
         documentId,
-        userId,
-        body: { title: normalized },
-        onError: (message) => {
-          setSaveState("error");
-          setSaveError(message);
-        },
-        onSuccess: (payload) => {
-          setTitle(payload.title);
-          latestTitleRef.current = payload.title;
-          setSaveState("saved");
-        },
-      });
-    }, 700);
+        pendingSaveRef,
+        saveTimerRef,
+        isSavingRef,
+        updatedAtRef,
+        latestTitleRef,
+        currentUserIdRef,
+        editorRef,
+        skipNextContentSaveRef,
+        setTitle,
+        setSaveState,
+        setSaveError,
+      },
+    );
   }
 
   function handleTitleBlur() {
@@ -306,42 +352,194 @@ function SaveStatus({ state }: { state: SaveState }) {
   );
 }
 
-async function saveDocument({
-  documentId,
-  userId,
-  body,
-  onSuccess,
-  onError,
-}: {
+type SaveController = {
   documentId: string;
-  userId: string;
-  body: { title?: string; content?: string };
-  onSuccess: (payload: { title: string; content: string }) => void;
-  onError: (message: string) => void;
-}) {
+  pendingSaveRef: MutableRefObject<PendingSave | null>;
+  saveTimerRef?: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  isSavingRef: MutableRefObject<boolean>;
+  updatedAtRef: MutableRefObject<string>;
+  latestTitleRef: MutableRefObject<string>;
+  currentUserIdRef: MutableRefObject<string | null>;
+  editorRef: MutableRefObject<Editor | null>;
+  skipNextContentSaveRef: MutableRefObject<boolean>;
+  setTitle: Dispatch<SetStateAction<string>>;
+  setSaveState: Dispatch<SetStateAction<SaveState>>;
+  setSaveError: Dispatch<SetStateAction<string | null>>;
+  keepalive?: boolean;
+};
+
+function queueSave(partial: PendingSave, controller: SaveController) {
+  controller.pendingSaveRef.current = {
+    ...controller.pendingSaveRef.current,
+    ...partial,
+  };
+  controller.setSaveState("saving");
+  controller.setSaveError(null);
+
+  if (controller.saveTimerRef?.current) {
+    clearTimeout(controller.saveTimerRef.current);
+  }
+
+  if (!controller.saveTimerRef) {
+    void runSaveQueue(controller);
+    return;
+  }
+
+  controller.saveTimerRef.current = setTimeout(() => {
+    if (controller.saveTimerRef) {
+      controller.saveTimerRef.current = null;
+    }
+    void runSaveQueue(controller);
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function runSaveQueue(controller: SaveController) {
+  const {
+    documentId,
+    pendingSaveRef,
+    isSavingRef,
+    updatedAtRef,
+    latestTitleRef,
+    currentUserIdRef,
+    editorRef,
+    skipNextContentSaveRef,
+    setTitle,
+    setSaveState,
+    setSaveError,
+    keepalive = false,
+  } = controller;
+
+  if (isSavingRef.current) {
+    return;
+  }
+
+  const userId = currentUserIdRef.current;
+  const pending = pendingSaveRef.current;
+
+  if (!userId || !pending) {
+    return;
+  }
+
+  const body: {
+    title?: string;
+    content?: string;
+    expectedUpdatedAt: string;
+  } = {
+    expectedUpdatedAt: updatedAtRef.current,
+  };
+
+  if (pending.title !== undefined) {
+    const normalized = normalizeDocumentTitle(pending.title);
+
+    if (!normalized) {
+      const remaining: PendingSave = { ...pending, title: undefined };
+      pendingSaveRef.current =
+        remaining.content !== undefined ? { content: remaining.content } : null;
+      setSaveState("error");
+      setSaveError("Title cannot be empty.");
+      return;
+    }
+
+    body.title = normalized;
+  }
+
+  if (pending.content !== undefined) {
+    const contentError = validateDocumentContent(pending.content);
+
+    if (contentError) {
+      setSaveState("error");
+      setSaveError(contentError);
+      return;
+    }
+
+    body.content = pending.content;
+  }
+
+  if (body.title === undefined && body.content === undefined) {
+    pendingSaveRef.current = null;
+    return;
+  }
+
+  pendingSaveRef.current = null;
+  isSavingRef.current = true;
+  setSaveState("saving");
+  setSaveError(null);
+
   try {
-    const response = await fetch(`/api/documents/${documentId}`, {
+    const response = await apiFetch(`/api/documents/${documentId}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        [USER_ID_HEADER]: userId,
-      },
+      userId,
       body: JSON.stringify(body),
+      keepalive,
     });
 
+    if (response.status === 409) {
+      const conflict = (await response.json()) as {
+        title?: string;
+        content?: string;
+        updatedAt?: string;
+        error?: string;
+      };
+
+      if (typeof conflict.updatedAt === "string") {
+        updatedAtRef.current = conflict.updatedAt;
+      }
+
+      if (typeof conflict.title === "string") {
+        setTitle(conflict.title);
+        latestTitleRef.current = conflict.title;
+      }
+
+      if (typeof conflict.content === "string" && editorRef.current) {
+        skipNextContentSaveRef.current = true;
+        editorRef.current.commands.setContent(conflict.content, {
+          emitUpdate: false,
+        });
+      }
+
+      setSaveState("error");
+      setSaveError(
+        typeof conflict.error === "string"
+          ? conflict.error
+          : "This document was updated elsewhere. Loaded the latest version.",
+      );
+      return;
+    }
+
     if (!response.ok) {
-      onError(await readApiError(response, "Failed to save document."));
+      pendingSaveRef.current = {
+        ...pending,
+        ...(pendingSaveRef.current ?? {}),
+      };
+      setSaveState("error");
+      setSaveError(await readApiError(response, "Failed to save document."));
       return;
     }
 
     const payload = (await response.json()) as {
       title: string;
       content: string;
+      updatedAt: string;
     };
-    onSuccess(payload);
+
+    updatedAtRef.current = payload.updatedAt;
+    setTitle(payload.title);
+    latestTitleRef.current = payload.title;
+    setSaveState("saved");
   } catch {
-    onError(
+    pendingSaveRef.current = {
+      ...pending,
+      ...(pendingSaveRef.current ?? {}),
+    };
+    setSaveState("error");
+    setSaveError(
       "Couldn’t save right now. Check your connection and try editing again.",
     );
+  } finally {
+    isSavingRef.current = false;
+
+    if (pendingSaveRef.current) {
+      void runSaveQueue(controller);
+    }
   }
 }

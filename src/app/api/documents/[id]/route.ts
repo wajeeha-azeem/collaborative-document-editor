@@ -4,6 +4,7 @@ import { userCanAccessDocument } from "@/lib/document-access";
 import {
   EMPTY_DOCUMENT_HTML,
   normalizeDocumentTitle,
+  validateDocumentContent,
 } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/request-user";
@@ -67,7 +68,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const existing = await prisma.document.findUnique({
     where: { id },
-    select: { id: true },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      updatedAt: true,
+    },
   });
 
   if (!existing) {
@@ -125,6 +131,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
+    const contentError = validateDocumentContent(body.content);
+
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 });
+    }
+
     updates.content = body.content;
   }
 
@@ -133,6 +145,36 @@ export async function PATCH(request: Request, context: RouteContext) {
       { error: "Provide a title and/or content to update." },
       { status: 400 },
     );
+  }
+
+  if (
+    "expectedUpdatedAt" in body &&
+    body.expectedUpdatedAt !== undefined &&
+    body.expectedUpdatedAt !== null
+  ) {
+    if (typeof body.expectedUpdatedAt !== "string") {
+      return NextResponse.json(
+        { error: "expectedUpdatedAt must be a string." },
+        { status: 400 },
+      );
+    }
+
+    const currentUpdatedAt = existing.updatedAt.toISOString();
+
+    if (body.expectedUpdatedAt !== currentUpdatedAt) {
+      return NextResponse.json(
+        {
+          error:
+            "This document was updated elsewhere. Reload the latest version and try again.",
+          conflict: true,
+          id: existing.id,
+          title: existing.title,
+          content: existing.content || EMPTY_DOCUMENT_HTML,
+          updatedAt: currentUpdatedAt,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const document = await prisma.document.update({

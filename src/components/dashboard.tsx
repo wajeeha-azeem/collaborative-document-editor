@@ -14,8 +14,8 @@ import { ErrorMessage } from "@/components/error-message";
 import { FileImport } from "@/components/file-import";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { apiFetch } from "@/lib/api-client";
 import { readApiError } from "@/lib/api-error";
-import { USER_ID_HEADER } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 type DocumentsResponse = {
@@ -59,10 +59,8 @@ export function Dashboard() {
       setLoadError(null);
 
       try {
-        const response = await fetch("/api/documents", {
-          headers: {
-            [USER_ID_HEADER]: userId,
-          },
+        const response = await apiFetch("/api/documents", {
+          userId,
         });
 
         if (!response.ok) {
@@ -106,11 +104,9 @@ export function Dashboard() {
 
     startCreateTransition(async () => {
       try {
-        const response = await fetch("/api/documents", {
+        const response = await apiFetch("/api/documents", {
           method: "POST",
-          headers: {
-            [USER_ID_HEADER]: currentUser.id,
-          },
+          userId: currentUser.id,
         });
 
         if (!response.ok) {
@@ -139,12 +135,9 @@ export function Dashboard() {
 
     setActionError(null);
 
-    const response = await fetch("/api/documents", {
+    const response = await apiFetch("/api/documents", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        [USER_ID_HEADER]: currentUser.id,
-      },
+      userId: currentUser.id,
       body: JSON.stringify(payload),
     });
 
@@ -163,12 +156,9 @@ export function Dashboard() {
       throw new Error("Select a demo user before renaming.");
     }
 
-    const response = await fetch(`/api/documents/${documentId}`, {
+    const response = await apiFetch(`/api/documents/${documentId}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        [USER_ID_HEADER]: currentUser.id,
-      },
+      userId: currentUser.id,
       body: JSON.stringify({ title }),
     });
 
