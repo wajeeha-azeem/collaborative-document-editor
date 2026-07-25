@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { userCanAccessDocument } from "@/lib/document-access";
+import { userCanEditDocument } from "@/lib/document-access";
 import { EMPTY_DOCUMENT_HTML } from "@/lib/documents";
 import { createDocumentVersion } from "@/lib/document-versions";
 import { prisma } from "@/lib/prisma";
@@ -19,11 +19,11 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { id: documentId, versionId } = await context.params;
 
-  const canAccess = await userCanAccessDocument(documentId, result.user.id);
+  const canEdit = await userCanEditDocument(documentId, result.user.id);
 
-  if (!canAccess) {
+  if (!canEdit) {
     return NextResponse.json(
-      { error: "You do not have access to this document." },
+      { error: "You have view-only access to this document." },
       { status: 403 },
     );
   }

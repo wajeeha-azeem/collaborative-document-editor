@@ -15,6 +15,7 @@ import {
 } from "react";
 import { Check, History, LoaderCircle, Save, Share2 } from "lucide-react";
 
+import { DocumentExportMenu } from "@/components/document-export-menu";
 import { DocumentShareDialog } from "@/components/document-share-dialog";
 import { DocumentVersionHistory } from "@/components/document-version-history";
 import { EditorToolbar } from "@/components/editor-toolbar";
@@ -29,6 +30,7 @@ import {
   normalizeDocumentTitle,
   validateDocumentContent,
 } from "@/lib/documents";
+import { openExclusiveOverlay } from "@/lib/exclusive-overlay";
 import { cn } from "@/lib/utils";
 
 const SAVE_DEBOUNCE_MS = 700;
@@ -66,17 +68,27 @@ export function DocumentEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const [versionMessage, setVersionMessage] = useState<string | null>(null);
 
+  function applyExclusiveOverlay(target: "download" | "history" | "share") {
+    const next = openExclusiveOverlay(target);
+    setDownloadOpen(next.downloadOpen);
+    setHistoryOpen(next.historyOpen);
+    setShareOpen(next.shareOpen);
+  }
+
+  function openDownloadMenu() {
+    applyExclusiveOverlay("download");
+  }
+
   function openHistoryModal() {
-    setShareOpen(false);
-    setHistoryOpen(true);
+    applyExclusiveOverlay("history");
   }
 
   function openShareModal() {
-    setHistoryOpen(false);
-    setShareOpen(true);
+    applyExclusiveOverlay("share");
   }
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,13 +144,34 @@ export function DocumentEditor({
   }, [title]);
 
   useEffect(() => {
-    async function flushSaveQueue(options?: { keepalive?: boolean }) {
+    function flushSaveQueue(options?: { keepalive?: boolean }) {
+      if (!canEditRef.current) {
+        return;
+      }
+
+      const hadDebounceTimer = Boolean(saveTimerRef.current);
+
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
 
-      await runSaveQueue({
+      // Capture in-progress edits that haven't hit pending yet (debounce window).
+      if (hadDebounceTimer || pendingSaveRef.current) {
+        pendingSaveRef.current = {
+          ...pendingSaveRef.current,
+          title: latestTitleRef.current,
+          ...(editorRef.current
+            ? { content: editorRef.current.getHTML() }
+            : {}),
+        };
+      }
+
+      if (!pendingSaveRef.current) {
+        return;
+      }
+
+      void runSaveQueue({
         documentId,
         pendingSaveRef,
         isSavingRef,
@@ -154,21 +187,18 @@ export function DocumentEditor({
       });
     }
 
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      if (!pendingSaveRef.current && !isSavingRef.current) {
-        return;
-      }
-
-      void flushSaveQueue({ keepalive: true });
-      event.preventDefault();
-      event.returnValue = "";
+    function handlePageLeave() {
+      flushSaveQueue({ keepalive: true });
     }
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageLeave);
+    window.addEventListener("beforeunload", handlePageLeave);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      void flushSaveQueue({ keepalive: true });
+      window.removeEventListener("pagehide", handlePageLeave);
+      window.removeEventListener("beforeunload", handlePageLeave);
+      // Next.js client navigations (e.g. back to dashboard) unmount the editor.
+      flushSaveQueue({ keepalive: true });
     };
   }, [documentId]);
 
@@ -287,9 +317,23 @@ export function DocumentEditor({
     }
   }
 
+  function handleVersionRestored(payload: {
+    title: string;
+    content: string;
+    updatedAt: string;
+  }) {
+    setTitle(payload.title);
+    latestTitleRef.current = payload.title;
+    updatedAtRef.current = payload.updatedAt;
+    skipNextContentSaveRef.current = true;
+    editor?.commands.setContent(payload.content, { emitUpdate: false });
+    setSaveState("saved");
+    setSaveError(null);
+    setVersionMessage("Restored version.");
+  }
 
   async function handleSaveVersion() {
-    if (!currentUser || isSavingVersion) {
+    if (!canEdit || !currentUser || isSavingVersion) {
       return;
     }
 
@@ -320,7 +364,13 @@ export function DocumentEditor({
         editorRef,
         skipNextContentSaveRef,
         setTitle,
-        setSaveState,
+        setSaveState: (value) => {
+          setSaveState((current) => {
+            const next = typeof value === "function" ? value(current) : value;
+            // Keep the status chip stable so toolbar icons don't jump.
+            return next === "saving" ? current : next;
+          });
+        },
         setSaveError,
       });
 
@@ -347,24 +397,9 @@ export function DocumentEditor({
     }
   }
 
-  function handleVersionRestored(payload: {
-    title: string;
-    content: string;
-    updatedAt: string;
-  }) {
-    setTitle(payload.title);
-    latestTitleRef.current = payload.title;
-    updatedAtRef.current = payload.updatedAt;
-    skipNextContentSaveRef.current = true;
-    editor?.commands.setContent(payload.content, { emitUpdate: false });
-    setSaveState("saved");
-    setSaveError(null);
-    setVersionMessage("Restored version.");
-  }
-
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
+      <div className="space-y-2 print:space-y-3">
         <div className="flex items-start gap-2 sm:gap-3">
           <label className="sr-only" htmlFor="document-title">
             Document title
@@ -385,47 +420,68 @@ export function DocumentEditor({
             placeholder="Untitled document"
           />
 
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2 print:hidden">
             {!canEdit ? (
               <span className="mr-1 inline-flex items-center rounded-full border border-border/70 bg-mist px-2.5 py-1 text-xs font-medium text-ink">
                 View only
               </span>
             ) : null}
             {canEdit && saveState !== "error" ? (
-              <SaveStatus state={saveState} />
+              <SaveStatus
+                state={
+                  isSavingVersion && saveState === "saving"
+                    ? "saved"
+                    : saveState
+                }
+              />
             ) : null}
-            {saveState !== "error" ? <SaveStatus state={saveState} /> : null}
-            <WithTooltip
-              label={isSavingVersion ? "Saving version…" : "Save version"}
-            >
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-9"
-                aria-label="Save version"
-                disabled={isSavingVersion}
-                onClick={() => void handleSaveVersion()}
+            {canEdit ? (
+              <WithTooltip
+                label={isSavingVersion ? "Saving version…" : "Save version"}
               >
-                {isSavingVersion ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <Save />
-                )}
-              </Button>
-            </WithTooltip>
-            <WithTooltip label="Version history">
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label="Version history"
-                className="size-9"
-                onClick={openHistoryModal}
-              >
-                <History />
-              </Button>
-            </WithTooltip>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-9"
+                  aria-label="Save version"
+                  disabled={isSavingVersion}
+                  onClick={() => void handleSaveVersion()}
+                >
+                  {isSavingVersion ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                </Button>
+              </WithTooltip>
+            ) : null}
+            <DocumentExportMenu
+              title={title}
+              getHtml={() => editor?.getHTML() ?? initialContent}
+              open={downloadOpen}
+              onOpenChange={(next) => {
+                if (next) {
+                  openDownloadMenu();
+                } else {
+                  setDownloadOpen(false);
+                }
+              }}
+            />
+            {canEdit ? (
+              <WithTooltip label="Version history">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Version history"
+                  className="size-9"
+                  onClick={openHistoryModal}
+                >
+                  <History />
+                </Button>
+              </WithTooltip>
+            ) : null}
             {isOwner ? (
               <WithTooltip label="Share">
                 <Button
@@ -445,7 +501,7 @@ export function DocumentEditor({
 
         <p id="document-meta" className="px-1 text-sm text-muted-foreground">
           Owned by {ownerName}
-          {isOwner ? null : " · Shared with you"}
+          {!isOwner ? " · Shared with you" : null}
           {versionMessage ? ` · ${versionMessage}` : null}
         </p>
 
@@ -454,9 +510,9 @@ export function DocumentEditor({
         ) : null}
       </div>
 
-      <div className="document-editor overflow-hidden rounded-2xl border border-border/80">
+      <div className="document-editor overflow-hidden rounded-2xl border border-border/80 print:border-0 print:shadow-none">
         {canEdit ? (
-          <div className="sticky top-0 z-10">
+          <div className="sticky top-0 z-10 print:hidden">
             <EditorToolbar editor={editor} />
           </div>
         ) : null}
@@ -472,13 +528,15 @@ export function DocumentEditor({
         />
       ) : null}
 
-      <DocumentVersionHistory
-        documentId={documentId}
-        canEdit
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        onRestored={handleVersionRestored}
-      />
+      {canEdit ? (
+        <DocumentVersionHistory
+          documentId={documentId}
+          canEdit={canEdit}
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={handleVersionRestored}
+        />
+      ) : null}
     </div>
   );
 }

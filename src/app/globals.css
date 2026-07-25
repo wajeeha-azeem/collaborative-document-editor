@@ -252,3 +252,27 @@
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
+
+@media print {
+  .app-shell {
+    background: white !important;
+  }
+
+  .app-shell::before {
+    display: none;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .document-editor {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .document-editor .document-editor__content {
+    min-height: auto;
+    padding: 0;
+  }
+}
