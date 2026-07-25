@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Collaborative Docs
 
-## Getting Started
+A lightweight collaborative document editor for creating, editing, importing, and sharing rich-text documents. Built as a full-stack product engineering take-home.
 
-First, run the development server:
+## Stack
+
+- **Next.js** (App Router) + TypeScript
+- **Tailwind CSS** + **shadcn/ui**
+- **Prisma** + **SQLite**
+- **Tiptap** rich text editor
+- **Vitest** for automated tests
+
+## Prerequisites
+
+- Node.js **20.9+** (use `nvm use` — see `.nvmrc`)
+- npm
+
+## Setup
 
 ```bash
+nvm use
+npm install
+cp .env.example .env
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Useful scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start local app |
+| `npm run build` | Production build |
+| `npm test` | Run Vitest suite |
+| `npm run db:seed` | Seed Alice & Bob |
+| `npm run db:studio` | Open Prisma Studio |
+| `npm run lint` | ESLint |
 
-## Learn More
+## Demo users
 
-To learn more about Next.js, take a look at the following resources:
+There is no password auth. On the home screen, pick a seeded user:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| User | Role in demos |
+|------|----------------|
+| **Alice** | Typical document owner |
+| **Bob** | Collaborate via sharing |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Selection is stored in `localStorage` (`cde:current-user`).
 
-## Deploy on Vercel
+## Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Select Alice or Bob and continue to the dashboard
+- Create documents (default title: **Untitled document**)
+- Rich text editing: bold, italic, underline, H1/H2, bullet & numbered lists
+- Autosave for title and content, with save status
+- Import `.txt` / `.md` / `.docx` (max 5 MB) into editable documents
+- Share owned documents with another user (edit access)
+- Dashboard separates **Your documents** and **Shared with you**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Suggested review flow
+
+1. Select **Alice** → Continue to dashboard  
+2. Create a document → edit + rename → confirm **Saved** → refresh  
+3. Share with **Bob**  
+4. Switch user → **Bob** → open from **Shared with you** → edit  
+5. Import a `.txt`, `.md`, or `.docx` file  
+6. Run `npm test`
+
+## Limitations
+
+- Auth is demo-only (seeded users + `localStorage` / `x-user-id` header)
+- Not real-time collaborative editing (no live cursors / CRDT)
+- Markdown import is a lightweight converter, not a full Markdown engine
+- SQLite is local-file based; serverless hosts need a different production DB strategy
+- No document delete UI (optional scope)
+
+## Future improvements
+
+- Proper Hosted database
+- Cookie-based session instead of client header auth
+- View-only share role (currently share = edit)
+- Document delete and richer import formats
+- End-to-end browser tests (Playwright) if needed
+
+## License
+
+Private take-home submission.
