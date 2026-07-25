@@ -50,7 +50,7 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-6 sm:gap-8 sm:py-10">
-      <header className="animate-app-fade-in flex items-center justify-between gap-4">
+      <header className="animate-app-fade-in flex items-center justify-between gap-4 print:hidden">
         <BrandMark href="/dashboard" />
         <Link
           href="/dashboard"

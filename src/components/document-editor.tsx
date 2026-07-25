@@ -15,6 +15,7 @@ import {
 } from "react";
 import { Check, LoaderCircle, Share2 } from "lucide-react";
 
+import { DocumentExportMenu } from "@/components/document-export-menu";
 import { DocumentShareDialog } from "@/components/document-share-dialog";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { ErrorMessage } from "@/components/error-message";
@@ -28,6 +29,7 @@ import {
   normalizeDocumentTitle,
   validateDocumentContent,
 } from "@/lib/documents";
+import { openExclusiveOverlay } from "@/lib/exclusive-overlay";
 import { cn } from "@/lib/utils";
 
 const SAVE_DEBOUNCE_MS = 700;
@@ -62,6 +64,19 @@ export function DocumentEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+
+  function openDownloadMenu() {
+    const next = openExclusiveOverlay("download");
+    setDownloadOpen(next.downloadOpen);
+    setShareOpen(next.shareOpen);
+  }
+
+  function openShareModal() {
+    const next = openExclusiveOverlay("share");
+    setDownloadOpen(next.downloadOpen);
+    setShareOpen(next.shareOpen);
+  }
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<PendingSave | null>(null);
@@ -254,7 +269,7 @@ export function DocumentEditor({
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
+      <div className="space-y-2 print:space-y-3">
         <div className="flex items-start gap-2 sm:gap-3">
           <label className="sr-only" htmlFor="document-title">
             Document title
@@ -274,8 +289,20 @@ export function DocumentEditor({
             placeholder="Untitled document"
           />
 
-          <div className="flex shrink-0 items-center gap-1 pt-1.5 sm:pt-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-1.5 sm:pt-2 print:hidden">
             {saveState !== "error" ? <SaveStatus state={saveState} /> : null}
+            <DocumentExportMenu
+              title={title}
+              getHtml={() => editor?.getHTML() ?? initialContent}
+              open={downloadOpen}
+              onOpenChange={(next) => {
+                if (next) {
+                  openDownloadMenu();
+                } else {
+                  setDownloadOpen(false);
+                }
+              }}
+            />
             {isOwner ? (
               <WithTooltip label="Share">
                 <Button
@@ -284,7 +311,7 @@ export function DocumentEditor({
                   variant="ghost"
                   aria-label="Share document"
                   className="size-9"
-                  onClick={() => setShareOpen(true)}
+                  onClick={openShareModal}
                 >
                   <Share2 />
                 </Button>
@@ -303,8 +330,8 @@ export function DocumentEditor({
         ) : null}
       </div>
 
-      <div className="document-editor overflow-hidden rounded-2xl border border-border/80">
-        <div className="sticky top-0 z-10">
+      <div className="document-editor overflow-hidden rounded-2xl border border-border/80 print:border-0 print:shadow-none">
+        <div className="sticky top-0 z-10 print:hidden">
           <EditorToolbar editor={editor} />
         </div>
         <EditorContent editor={editor} />

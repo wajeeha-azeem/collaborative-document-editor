@@ -77,6 +77,7 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 - Autosave for title and content, with save status
 - Import `.txt` / `.md` / `.docx` (max 5 MB) into editable documents
 - Share owned documents with another user (edit access)
+- Export to Markdown or PDF (real file downloads)
 - Dashboard separates **Your documents** and **Shared with you**
 
 ## Suggested review flow
@@ -86,7 +87,8 @@ Selection is stored in `localStorage` (`cde:current-user`) and synced to a cooki
 3. Share with **Bob**  
 4. Switch user → **Bob** → open from **Shared with you** → edit  
 5. Import a `.txt`, `.md`, or `.docx` file  
-6. Run `npm test`
+6. Download Markdown or PDF from the editor or dashboard  
+7. Run `npm test`
 
 ## Limitations
 

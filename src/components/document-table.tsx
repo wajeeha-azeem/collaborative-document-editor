@@ -5,10 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowRight, Check, Pencil, Share2, X } from "lucide-react";
 
+import { DocumentExportMenu } from "@/components/document-export-menu";
 import { DocumentShareDialog } from "@/components/document-share-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { WithTooltip } from "@/components/with-tooltip";
-import { normalizeDocumentTitle } from "@/lib/documents";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { apiFetch } from "@/lib/api-client";
+import { readApiError } from "@/lib/api-error";
+import { EMPTY_DOCUMENT_HTML, normalizeDocumentTitle } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 export type DashboardDocument = {
@@ -35,6 +39,7 @@ export function DocumentTable({
   allowShare = false,
   onRename,
 }: DocumentTableProps) {
+  const currentUser = useCurrentUser();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -49,6 +54,26 @@ export function DocumentTable({
       inputRef.current?.select();
     }
   }, [editingId]);
+
+
+  async function loadDocumentHtml(documentId: string) {
+    if (!currentUser) {
+      throw new Error("Select a demo user before downloading.");
+    }
+
+    const response = await apiFetch(`/api/documents/${documentId}`, {
+      userId: currentUser.id,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Failed to load document for download."),
+      );
+    }
+
+    const data = (await response.json()) as { content?: string };
+    return data.content?.trim() ? data.content : EMPTY_DOCUMENT_HTML;
+  }
 
   function startRename(document: DashboardDocument) {
     setEditingId(document.id);
@@ -212,6 +237,11 @@ export function DocumentTable({
                               <Pencil />
                             </Button>
                           </WithTooltip>
+                          <DocumentExportMenu
+                            title={document.title}
+                            buttonSize="icon-sm"
+                            getHtml={() => loadDocumentHtml(document.id)}
+                          />
                           {allowShare ? (
                             <WithTooltip label="Share">
                               <Button

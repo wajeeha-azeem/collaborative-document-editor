@@ -100,3 +100,8 @@ Sharing DB tests create uniquely named users and clean them up afterward so they
 | HTML content | Simple Tiptap save/load |
 | Share = edit | Matches product plan; no advanced ACL |
 | No real-time sync | Explicitly out of scope |
+
+## Export
+
+Client-side Markdown and PDF downloads (`jspdf`) from HTML content. Download and share overlays are mutually exclusive in the editor.
+
