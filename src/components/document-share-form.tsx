@@ -7,6 +7,9 @@ import { ErrorMessage } from "@/components/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { apiFetch } from "@/lib/api-client";
 import { readApiError } from "@/lib/api-error";
+import { shareRoleLabel } from "@/lib/share-role";
+
+type ShareRole = "VIEW" | "EDIT";
 
 type ShareUser = {
   id: string;
@@ -17,6 +20,8 @@ type DocumentShare = {
   id: string;
   userId: string;
   userName: string;
+  role: ShareRole;
+  roleLabel: string;
 };
 
 type DocumentShareFormProps = {
@@ -32,6 +37,7 @@ export function DocumentShareForm({
   const [users, setUsers] = useState<ShareUser[]>([]);
   const [shares, setShares] = useState<DocumentShare[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedRole, setSelectedRole] = useState<ShareRole>("EDIT");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
@@ -119,7 +125,10 @@ export function DocumentShareForm({
         const response = await apiFetch(`/api/documents/${documentId}/shares`, {
           method: "POST",
           userId: currentUser.id,
-          body: JSON.stringify({ userId: selectedUserId }),
+          body: JSON.stringify({
+            userId: selectedUserId,
+            role: selectedRole,
+          }),
         });
 
         if (!response.ok) {
@@ -151,40 +160,64 @@ export function DocumentShareForm({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <label className="sr-only" htmlFor={selectId}>
-          Share with user
-        </label>
-        <select
-          id={selectId}
-          value={
-            availableUsers.some((user) => user.id === selectedUserId)
-              ? selectedUserId
-              : (availableUsers[0]?.id ?? "")
-          }
-          onChange={(event) => setSelectedUserId(event.target.value)}
-          disabled={availableUsers.length === 0 || isSharing}
-          className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 sm:max-w-xs"
-        >
-          {availableUsers.length === 0 ? (
-            <option value="">Everyone available already has access</option>
-          ) : (
-            availableUsers.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))
-          )}
-        </select>
-        <Button
-          type="button"
-          size="lg"
-          className="h-11"
-          onClick={handleShare}
-          disabled={availableUsers.length === 0 || !selectedUserId || isSharing}
-        >
-          {isSharing ? "Sharing…" : "Give access"}
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="sr-only" htmlFor={selectId}>
+            Share with user
+          </label>
+          <select
+            id={selectId}
+            value={
+              availableUsers.some((user) => user.id === selectedUserId)
+                ? selectedUserId
+                : (availableUsers[0]?.id ?? "")
+            }
+            onChange={(event) => setSelectedUserId(event.target.value)}
+            disabled={availableUsers.length === 0 || isSharing}
+            className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 sm:max-w-xs"
+          >
+            {availableUsers.length === 0 ? (
+              <option value="">Everyone available already has access</option>
+            ) : (
+              availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))
+            )}
+          </select>
+
+          <label className="sr-only" htmlFor={`${selectId}-role`}>
+            Permission
+          </label>
+          <select
+            id={`${selectId}-role`}
+            value={selectedRole}
+            onChange={(event) =>
+              setSelectedRole(event.target.value as ShareRole)
+            }
+            disabled={availableUsers.length === 0 || isSharing}
+            className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 sm:max-w-[9.5rem]"
+          >
+            <option value="EDIT">Can edit</option>
+            <option value="VIEW">Can view</option>
+          </select>
+
+          <Button
+            type="button"
+            size="lg"
+            className="h-11"
+            onClick={handleShare}
+            disabled={
+              availableUsers.length === 0 || !selectedUserId || isSharing
+            }
+          >
+            {isSharing ? "Sharing…" : "Give access"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          View-only users can open and export the document but cannot change it.
+        </p>
       </div>
 
       {shares.length > 0 ? (
@@ -203,7 +236,9 @@ export function DocumentShareForm({
               <span className="font-medium text-foreground">
                 {share.userName}
               </span>
-              <span className="text-xs text-muted-foreground">Can edit</span>
+              <span className="text-xs text-muted-foreground">
+                {share.roleLabel ?? shareRoleLabel(share.role)}
+              </span>
             </li>
           ))}
         </ul>

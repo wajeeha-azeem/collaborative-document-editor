@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ShareRole {
+  VIEW
+  EDIT
+}
+
 model User {
   id              String          @id @default(cuid())
   name            String          @unique
@@ -30,12 +35,13 @@ model Document {
 }
 
 model DocumentShare {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   documentId String
   userId     String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  role       ShareRole @default(EDIT)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
 
   @@unique([documentId, userId])
   @@index([userId])

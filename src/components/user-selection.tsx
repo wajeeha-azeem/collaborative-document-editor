@@ -85,7 +85,7 @@ export function UserSelection({ users }: UserSelectionProps) {
                   <span className="block text-sm text-muted-foreground">
                     {isCurrent
                       ? "Pick up where you left off"
-                      : "Open their documents and shares"}
+                      : "Open the documents and shares"}
                   </span>
                 </span>
                 <span

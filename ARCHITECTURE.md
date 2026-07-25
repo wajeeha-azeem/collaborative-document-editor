@@ -100,3 +100,8 @@ Sharing DB tests create uniquely named users and clean them up afterward so they
 | HTML content | Simple Tiptap save/load |
 | Share = edit | Matches product plan; no advanced ACL |
 | No real-time sync | Explicitly out of scope |
+
+## Share roles
+
+`DocumentShare.role` is `VIEW` or `EDIT`. Owners always have edit access. View-only users can open documents but cannot PATCH content or rename.
+
