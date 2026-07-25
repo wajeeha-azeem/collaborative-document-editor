@@ -121,9 +121,6 @@ describe.skipIf(!isPostgres)("document sharing", () => {
         await prisma.documentShare.deleteMany({
           where: { documentId: document.id },
         });
-        await prisma.documentVersion.deleteMany({
-          where: { documentId: document.id },
-        });
         await prisma.document.deleteMany({ where: { id: document.id } });
         await prisma.user.deleteMany({
           where: { id: { in: [alice.id, bob.id] } },
