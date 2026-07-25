@@ -54,3 +54,7 @@ Built task-by-task from `TASKS.md` with approach/trade-off notes before each cha
 ## Contact / repo
 
 Local repository only unless a remote URL is provided separately. **Do not assume code was pushed** unless explicitly shared.
+
+### Export
+
+Download Markdown or PDF from the editor and dashboard table.
