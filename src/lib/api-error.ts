@@ -24,6 +24,10 @@ export async function readApiError(
     return "You don’t have permission to do that.";
   }
 
+  if (response.status === 409) {
+    return "This document was updated elsewhere. Reload and try again.";
+  }
+
   if (response.status >= 500) {
     return "Something went wrong on the server. Please try again.";
   }

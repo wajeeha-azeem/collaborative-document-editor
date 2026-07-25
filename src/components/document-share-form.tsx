@@ -5,8 +5,8 @@ import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/components/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { apiFetch } from "@/lib/api-client";
 import { readApiError } from "@/lib/api-error";
-import { USER_ID_HEADER } from "@/lib/documents";
 
 type ShareUser = {
   id: string;
@@ -50,12 +50,8 @@ export function DocumentShareForm({
 
       try {
         const [usersResponse, sharesResponse] = await Promise.all([
-          fetch("/api/users", {
-            headers: { [USER_ID_HEADER]: userId },
-          }),
-          fetch(`/api/documents/${documentId}/shares`, {
-            headers: { [USER_ID_HEADER]: userId },
-          }),
+          apiFetch("/api/users", { userId }),
+          apiFetch(`/api/documents/${documentId}/shares`, { userId }),
         ]);
 
         if (!usersResponse.ok) {
@@ -120,12 +116,9 @@ export function DocumentShareForm({
 
     startShareTransition(async () => {
       try {
-        const response = await fetch(`/api/documents/${documentId}/shares`, {
+        const response = await apiFetch(`/api/documents/${documentId}/shares`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            [USER_ID_HEADER]: currentUser.id,
-          },
+          userId: currentUser.id,
           body: JSON.stringify({ userId: selectedUserId }),
         });
 

@@ -6,7 +6,7 @@ A lightweight collaborative document editor for creating, editing, importing, an
 
 - **Next.js** (App Router) + TypeScript
 - **Tailwind CSS** + **shadcn/ui**
-- **Prisma** + **SQLite**
+- **Prisma** + **PostgreSQL** (Neon recommended)
 - **Tiptap** rich text editor
 - **Vitest** for automated tests
 
@@ -14,13 +14,18 @@ A lightweight collaborative document editor for creating, editing, importing, an
 
 - Node.js **20.9+** (use `nvm use` — see `.nvmrc`)
 - npm
+- A Postgres database (free [Neon](https://neon.tech) project works)
 
 ## Setup
+
+1. Create a Neon project and copy the connection string.
+2. Configure env and install:
 
 ```bash
 nvm use
 npm install
 cp .env.example .env
+# Paste your Neon URL into DATABASE_URL in .env
 npx prisma migrate deploy
 npm run db:seed
 npm run dev
@@ -33,11 +38,25 @@ Open [http://localhost:3000](http://localhost:3000).
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start local app |
-| `npm run build` | Production build |
+| `npm run build` | Migrate + production build (Vercel-friendly) |
 | `npm test` | Run Vitest suite |
 | `npm run db:seed` | Seed Alice & Bob |
+| `npm run db:deploy` | Apply migrations |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run lint` | ESLint |
+
+## Deploy on Vercel
+
+1. Push the repo to GitHub.
+2. Import the project in [Vercel](https://vercel.com).
+3. Set **Node.js 20.x** in project settings.
+4. Add env var `DATABASE_URL` = your Neon connection string (pooled URL is fine).
+5. Deploy. Build runs `prisma migrate deploy && next build`.
+6. Seed demo users once (from your machine):
+
+```bash
+DATABASE_URL="your-neon-url" npm run db:seed
+```
 
 ## Demo users
 
@@ -48,7 +67,7 @@ There is no password auth. On the home screen, pick a seeded user:
 | **Alice** | Typical document owner |
 | **Bob** | Collaborate via sharing |
 
-Selection is stored in `localStorage` (`cde:current-user`).
+Selection is stored in `localStorage` (`cde:current-user`) and synced to a cookie for server authz.
 
 ## Features
 
@@ -71,16 +90,14 @@ Selection is stored in `localStorage` (`cde:current-user`).
 
 ## Limitations
 
-- Auth is demo-only (seeded users + `localStorage` / `x-user-id` header)
-- Not real-time collaborative editing (no live cursors / CRDT)
+- Auth is demo-only (seeded users + `localStorage` / cookie / `x-user-id` header)
+- Not real-time collaborative editing (no live cursors / CRDT); concurrent saves use optimistic `updatedAt` checks
 - Markdown import is a lightweight converter, not a full Markdown engine
-- SQLite is local-file based; serverless hosts need a different production DB strategy
 - No document delete UI (optional scope)
 
 ## Future improvements
 
-- Proper Hosted database
-- Cookie-based session instead of client header auth
+- Cookie-only session (drop client header auth)
 - View-only share role (currently share = edit)
 - Document delete and richer import formats
 - End-to-end browser tests (Playwright) if needed

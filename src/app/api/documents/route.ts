@@ -4,6 +4,7 @@ import {
   DEFAULT_DOCUMENT_TITLE,
   EMPTY_DOCUMENT_HTML,
   normalizeDocumentTitle,
+  validateDocumentContent,
 } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/request-user";
@@ -104,6 +105,12 @@ export async function POST(request: Request) {
             { error: "Content must be a string." },
             { status: 400 },
           );
+        }
+
+        const contentError = validateDocumentContent(body.content);
+
+        if (contentError) {
+          return NextResponse.json({ error: contentError }, { status: 400 });
         }
 
         content = body.content.trim() ? body.content : EMPTY_DOCUMENT_HTML;

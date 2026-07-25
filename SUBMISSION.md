@@ -12,6 +12,7 @@ See [README.md](./README.md).
 nvm use
 npm install
 cp .env.example .env
+# Set DATABASE_URL to your Neon Postgres connection string
 npx prisma migrate deploy
 npm run db:seed
 npm run dev
@@ -29,7 +30,7 @@ No passwords. Use the home-screen user picker:
 1. Select Alice → create/edit document → refresh (persistence)
 2. Share with Bob → switch to Bob → open shared doc → edit
 3. Import `.txt` / `.md` / `.docx`
-4. `npm test` (7 tests)
+4. `npm test` (unit + sharing tests when `DATABASE_URL` is Postgres)
 
 ## Deliverables status
 
@@ -38,13 +39,12 @@ No passwords. Use the home-screen user picker:
 | Core product flows | Complete |
 | Automated tests | Complete (`npm test`) |
 | Documentation | Complete (README, ARCHITECTURE, AI_WORKFLOW, SUBMISSION) |
-| Deployment | Not deployed in this pass — app is verified locally; checklist item remains if a live URL is required |
+| Deployment | Ready for Vercel + Neon — set `DATABASE_URL`, deploy, then seed |
 
 ## Known limitations
 
-- Demo auth only (localStorage + `x-user-id`)
-- No real-time multiplayer editing
-- SQLite local file DB
+- Demo auth only (localStorage + cookie + `x-user-id`)
+- No real-time multiplayer editing (optimistic concurrency via `updatedAt`)
 - Lightweight Markdown import
 
 ## Time / process notes

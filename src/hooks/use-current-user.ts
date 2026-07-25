@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import {
   type UserSession,
   USER_SESSION_STORAGE_KEY,
   parseUserSession,
+  syncUserIdCookie,
 } from "@/lib/user-session";
 
 const SESSION_CHANGE_EVENT = "cde:user-session-change";
@@ -49,5 +50,14 @@ export function useCurrentUser(): UserSession | null {
     getServerSnapshot,
   );
 
-  return useMemo(() => parseUserSession(sessionRaw), [sessionRaw]);
+  const session = useMemo(() => parseUserSession(sessionRaw), [sessionRaw]);
+
+  // Keep the server-readable cookie in sync for existing localStorage sessions.
+  useEffect(() => {
+    if (session) {
+      syncUserIdCookie(session.id);
+    }
+  }, [session]);
+
+  return session;
 }
